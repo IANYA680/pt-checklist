@@ -1052,10 +1052,10 @@ async function getSheetName() {
 async function saveMembers() {
   try {
     const sheet = await getSheetName();
-    const values = members.map(m => [m.id, m.name, JSON.stringify(m.sessions || []), m.remaining ?? '', m.attention ? '1' : '0', m.missedWeeks || 0]);
+    const values = members.map(m => [m.id, m.name, JSON.stringify(m.sessions || []), m.remaining ?? '', m.attention ? '1' : '0', m.missedWeeks || 0, m.lastMissedWeekKey || '', JSON.stringify(m.deductedIds || [])]);
     await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: SHEET_ID,
-      range: sheet + '!A:F'
+      range: sheet + '!A:H'
     });
     if (values.length > 0) {
       await gapi.client.sheets.spreadsheets.values.update({
@@ -1086,7 +1086,9 @@ async function loadMembers() {
       sessions: (() => { try { return JSON.parse(row[2] || '[]'); } catch(e) { return []; } })(),
       remaining: row[3] !== undefined && row[3] !== '' ? Number(row[3]) : undefined,
       attention: row[4] === '1',
-      missedWeeks: Number(row[5]) || 0
+      missedWeeks: Number(row[5]) || 0,
+      lastMissedWeekKey: row[6] || null,
+      deductedIds: (() => { try { return JSON.parse(row[7] || '[]'); } catch(e) { return []; } })()
     })).filter(m => m.name);
   } catch(e) {
     console.error('Sheets load error:', e);
@@ -1279,13 +1281,16 @@ async function syncCalendar(silent = false) {
 
 function matchMembersToEvents() {
   const now = new Date();
+  // 이번 주 월요일 날짜 (YYYY-MM-DD) — 주 단위 중복 방지용
+  const { start } = getWeekRange();
+  const thisWeekKey = start.toISOString().slice(0, 10);
+
   members.forEach(member => {
     const matched = calendarEvents.filter(evt => {
       const title = evt.summary || '';
       return title.includes(member.name);
     });
 
-    // 완료된 세션 ID 목록 (중복 차감 방지용)
     if (!member.deductedIds) member.deductedIds = [];
 
     if (matched.length > 0) {
@@ -1295,7 +1300,10 @@ function matchMembersToEvents() {
         start: evt.start.dateTime || evt.start.date
       }));
       // 수업 있으면 missedWeeks 리셋
-      if (weekOffset === 0) member.missedWeeks = 0;
+      if (weekOffset === 0) {
+        member.missedWeeks = 0;
+        member.lastMissedWeekKey = null;
+      }
 
       // 완료된 수업 자동 차감 (중복 방지)
       if (weekOffset === 0 && member.remaining !== undefined) {
@@ -1310,9 +1318,10 @@ function matchMembersToEvents() {
       }
     } else {
       member.sessions = [];
-      // 이번 주(금주)일 때만 missedWeeks 누적
-      if (weekOffset === 0) {
+      // 이번 주(금주)일 때만 missedWeeks 누적 — 같은 주에 여러 번 동기화해도 1번만
+      if (weekOffset === 0 && member.lastMissedWeekKey !== thisWeekKey) {
         member.missedWeeks = (member.missedWeeks || 0) + 1;
+        member.lastMissedWeekKey = thisWeekKey;
       }
     }
   });
