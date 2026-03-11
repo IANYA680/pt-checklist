@@ -1077,7 +1077,7 @@ async function loadMembers() {
     const sheet = await getSheetName();
     const resp = await gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: sheet + '!A:C'
+      range: sheet + '!A:H'
     });
     const rows = resp.result.values || [];
     members = rows.map(row => ({
