@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PT 회원 수업 체크리스트</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161921;
+    --surface2: #1e2230;
+    --border: #2a2f3e;
+    --accent: #00e5a0;
+    --accent2: #ff6b6b;
+    --accent3: #ffd166;
+    --text: #e8ecf4;
+    --text-muted: #6b7280;
+    --text-dim: #9ca3b0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,160,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .logo-area h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+
+  .logo-area h1 span {
+    color: var(--accent);
+  }
+
+  .logo-area p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .week-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 13px;
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  .week-badge strong {
+    display: block;
+    font-size: 15px;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+
+  /* Auth section */
+  #auth-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 60px 40px;
+    text-align: center;
+    margin-bottom: 30px;
+  }
+
+  #auth-section .icon {
+    font-size: 56px;
+    margin-bottom: 20px;
+    display: block;
+  }
+
+  #auth-section h2 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+
+  #auth-section p {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin-bottom: 30px;
+    line-height: 1.7;
+  }
+
+  .btn-google {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: white;
+    color: #333;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 28px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: 'Noto Sans KR', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+  }
+
+  .btn-google:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(255,255,255,0.15);
+  }
+
+  .btn-google svg { width: 20px; height: 20px; }
+
+  /* API key input section */
+  .api-setup {
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-top: 20px;
+    text-align: left;
+  }
+
+  .api-setup h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .api-setup p {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    line-height: 1.6;
+    text-align: left;
+  }
+
+  .api-setup ol {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin: 0 0 16px 18px;
+    line-height: 2;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .input-row input {
+    flex: 1;
+    min-width: 200px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: 'Space Grotesk', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .input-row input:focus { border-color: var(--accent); }
+  .input-row input::placeholder { color: var(--text-muted); }
+
+  .btn-sm {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Noto Sans KR', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-sm:hover { opacity: 0.85; }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+
+  .stat-card.green::after { background: var(--accent); }
+  .stat-card.red::after { background: var(--accent2); }
+  .stat-card.yellow::after { background: var(--accent3); }
+
+  .stat-card .num {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .stat-card.green .num { color: var(--accent); }
+  .stat-card.red .num { color: var(--accent2); }
+  .stat-card.yellow .num { color: var(--accent3); }
+
+  .stat-card .label {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  /* Member section */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .dot.red { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  .dot.green { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+  .btn-add {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-family: 'Noto Sans KR', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Member card */
+  .member-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .member-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: all 0.2s;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .member-card:hover { border-color: var(--border); background: var(--surface2); }
+
+  .member-card.has-session { border-left: 3px solid var(--accent); }
+  .member-card.done-session { border-left: 3px solid #ffaa55 !important; }
+  .member-card.no-session { border-left: 3px solid var(--accent2); }
+
+  .avatar {
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    flex-shrink: 0;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .avatar.green { background: rgba(0,229,160,0.15); color: var(--accent); }
+  .avatar.red { background: rgba(255,107,107,0.15); color: var(--accent2); }
+  .avatar.done { background: rgba(255,150,80,0.15); color: #ffaa55; }
+
+  .member-info { flex: 1; min-width: 0; }
+
+  .member-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tag {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .tag.green { background: rgba(0,229,160,0.15); color: var(--accent); }
+  .tag.red { background: rgba(255,107,107,0.15); color: var(--accent2); }
+  .tag.done { background: rgba(255,150,80,0.15); color: #ffaa55; }
+
+  .member-sessions {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+
+  /* Session chip states */
+  .session-chip {
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .session-chip.upcoming {
+    background: rgba(0,229,160,0.1);
+    border: 1px solid rgba(0,229,160,0.3);
+    color: var(--accent);
+  }
+
+  .session-chip.done {
+    background: rgba(255,107,107,0.08);
+    border: 1px solid rgba(255,107,107,0.25);
+    color: #ff9090;
+  }
+
+  .session-chip.upcoming::before { content: '→'; font-size: 10px; }
+  .session-chip.done::before { content: '✓'; font-size: 10px; color: #ff9090; }
+
+  /* Two column layout */
+  .main-layout {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .main-layout { grid-template-columns: 1fr; }
+  }
+
+  /* Weekly schedule - Google Calendar style */
+  .schedule-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    position: sticky;
+    top: 20px;
+  }
+
+  .schedule-panel-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .schedule-panel-header h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .schedule-grid {
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* Time column */
+  .time-col {
+    width: 40px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+  }
+
+  .time-col-header { height: 36px; }
+
+  .time-label {
+    height: 48px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 2px;
+    font-size: 10px;
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    margin-top: -1px;
+  }
+
+  /* Days columns */
+  .days-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    overflow-x: auto;
+  }
+
+  .day-col { position: relative; min-width: 0; }
+
+  .day-col-header {
+    height: 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-left: 1px solid var(--border);
+    font-size: 10px;
+    gap: 1px;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 2;
+  }
+
+  .day-col-header .dname {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+
+  .day-col-header .dnum {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-dim);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .day-col-header.today .dname { color: var(--accent); }
+  .day-col-header.today .dnum {
+    background: var(--accent);
+    color: #000;
+  }
+
+  .day-body {
+    position: relative;
+    border-left: 1px solid var(--border);
+  }
+
+  .hour-cell {
+    height: 48px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .hour-cell.half { border-top: 1px dashed rgba(255,255,255,0.02); }
+
+  /* Event blocks */
+  .cal-block {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    border-radius: 4px;
+    padding: 2px 4px;
+    font-size: 10px;
+    overflow: hidden;
+    cursor: default;
+    z-index: 1;
+    line-height: 1.3;
+  }
+
+  .cal-block.upcoming {
+    background: rgba(0,229,160,0.2);
+    border-left: 2px solid var(--accent);
+    color: var(--accent);
+  }
+
+  .cal-block.past {
+    background: rgba(120,120,140,0.15);
+    border-left: 2px solid #555;
+    color: #777;
+  }
+
+  .cal-block .blk-time { font-size: 9px; opacity: 0.8; }
+  .cal-block .blk-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Current time line */
+  .now-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: var(--accent2);
+    z-index: 3;
+  }
+
+  .now-line::before {
+    content: '';
+    position: absolute;
+    left: -4px;
+    top: -4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent2);
+  }
+
+
+  .no-session-text {
+    color: var(--accent2);
+    font-size: 12px;
+  }
+
+  .member-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .icon-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+
+  .icon-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  /* Add member form */
+  .add-form {
+    background: var(--surface);
+    border: 1px dashed var(--accent);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: none;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .add-form.open { display: flex; }
+
+  .add-form input {
+    flex: 1;
+    min-width: 150px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: 'Noto Sans KR', sans-serif;
+    outline: none;
+  }
+
+  .add-form input:focus { border-color: var(--accent); }
+
+  /* Sync button */
+  .btn-sync {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,229,160,0.1);
+    border: 1px solid rgba(0,229,160,0.3);
+    border-radius: 10px;
+    padding: 10px 18px;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Noto Sans KR', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-sync:hover { background: rgba(0,229,160,0.2); }
+  .btn-sync.loading { opacity: 0.6; pointer-events: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinning { animation: spin 1s linear infinite; display: inline-block; }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  /* Calendar modal */
+  .modal-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-bg.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 30px;
+    width: 90%;
+    max-width: 480px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .modal h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .modal p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+  }
+
+  .cal-event {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .cal-event:hover { border-color: var(--accent); }
+  .cal-event.selected { border-color: var(--accent); background: rgba(0,229,160,0.08); }
+
+  .cal-event .time {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 12px;
+    color: var(--accent);
+    min-width: 50px;
+  }
+
+  .cal-event .title {
+    font-size: 14px;
+    flex: 1;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .btn-cancel {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    color: var(--text-muted);
+    font-size: 14px;
+    font-family: 'Noto Sans KR', sans-serif;
+    cursor: pointer;
+  }
+
+  .btn-confirm {
+    flex: 1;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    color: #000;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: 'Noto Sans KR', sans-serif;
+    cursor: pointer;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 20px;
+    font-size: 14px;
+    z-index: 200;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s;
+  }
+
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: var(--accent); color: var(--accent); }
+  .toast.error { border-color: var(--accent2); color: var(--accent2); }
+
+  /* Connected info */
+  .connected-bar {
+    background: rgba(0,229,160,0.08);
+    border: 1px solid rgba(0,229,160,0.2);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    display: none;
+  }
+
+  .connected-bar.show { display: flex; }
+
+  .btn-disconnect {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  @media (max-width: 600px) {
+    .stats-row { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat-card .num { font-size: 28px; }
+    .header { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-area">
+      <h1>PT <span>Check</span>list</h1>
+      <p>이번 주 수업 미예약 회원 관리</p>
+    </div>
+    <div class="week-badge">
+      <strong id="week-label">이번 주</strong>
+      <span id="week-range">날짜 로딩 중...</span>
+    </div>
+  </div>
+
+  <!-- Connected bar -->
+  <div class="connected-bar" id="connected-bar">
+    <span>✅ 구글 캘린더 연동됨 · <span id="connected-email"></span></span>
+    <span id="sync-countdown" style="font-size:11px;color:var(--text-muted);"></span>
+    <button class="btn-disconnect" onclick="disconnect()">연결 해제</button>
+  </div>
+
+  <!-- Auth Section -->
+  <div id="auth-section">
+    <span class="icon">📅</span>
+    <h2>구글 캘린더와 연동하세요</h2>
+    <p>
+      이번 주 수업 일정을 자동으로 불러와<br>
+      수업이 없는 회원을 빠르게 파악할 수 있어요.
+    </p>
+    <button class="btn-google" onclick="startGoogleAuth()">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      Google로 로그인
+    </button>
+
+    <div class="api-setup">
+      <h3>⚙️ Google API 설정 방법</h3>
+      <p>구글 캘린더 연동을 위해 아래 단계를 따라 Client ID를 발급받으세요:</p>
+      <ol>
+        <li><a href="https://console.cloud.google.com" target="_blank" style="color:var(--accent)">console.cloud.google.com</a> 접속 → 새 프로젝트 생성</li>
+        <li>API 및 서비스 → 라이브러리 → "Google Calendar API" 활성화</li>
+        <li>OAuth 동의 화면 설정 (외부, 테스트 모드)</li>
+        <li>사용자 인증 정보 → OAuth 2.0 클라이언트 ID 생성</li>
+        <li>승인된 JavaScript 원본에 현재 도메인 추가</li>
+        <li>생성된 Client ID를 아래에 입력</li>
+      </ol>
+      <div class="input-row">
+        <input type="text" id="client-id-input" placeholder="Google OAuth Client ID 입력 (xxx.apps.googleusercontent.com)">
+        <button class="btn-sm" onclick="saveClientId()">저장 후 로그인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App (hidden until auth) -->
+  <div id="main-app" style="display:none">
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card red">
+        <div class="num" id="stat-no-session">0</div>
+        <div class="label">수업 미예약</div>
+      </div>
+      <div class="stat-card green">
+        <div class="num" id="stat-has-session">0</div>
+        <div class="label">수업 예약됨</div>
+      </div>
+      <div class="stat-card yellow">
+        <div class="num" id="stat-total">0</div>
+        <div class="label">전체 회원</div>
+      </div>
+    </div>
+
+    <!-- No-session members -->
+    <div class="section-header">
+      <div class="section-title">
+        <span class="dot red"></span> 이번 주 수업 없는 회원
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn-sync" id="sync-btn" onclick="syncCalendar()">
+          <span id="sync-icon">🔄</span> 캘린더 동기화
+        </button>
+        <button class="btn-add" onclick="toggleAddForm()">+ 회원 추가</button>
+      </div>
+    </div>
+
+    <div class="add-form" id="add-form">
+      <input type="text" id="new-member-name" placeholder="회원 이름 입력..." onkeydown="if(event.key==='Enter')addMember()">
+      <button class="btn-sm" onclick="addMember()">추가</button>
+      <button class="btn-cancel" style="flex:none;padding:10px 14px;border-radius:8px" onclick="toggleAddForm()">취소</button>
+    </div>
+
+    <div class="main-layout">
+      <div class="members-col">
+        <div class="member-list" id="no-session-list"></div>
+
+        <!-- Has-session members -->
+        <div class="section-header" style="margin-top:10px">
+          <div class="section-title">
+            <span class="dot green"></span> 이번 주 수업 있는 회원
+          </div>
+        </div>
+        <div class="member-list" id="has-session-list"></div>
+      </div>
+
+      <!-- Weekly Schedule Panel -->
+      <div class="schedule-panel">
+        <div class="schedule-panel-header">
+          <h3>📆 이번 주 스케줄</h3>
+        </div>
+        <div id="schedule-days">
+          <div style="color:var(--text-muted);font-size:13px;text-align:center;padding:30px">캘린더 동기화 후 표시돼요</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Calendar Event Modal -->
+<div class="modal-bg" id="cal-modal">
+  <div class="modal">
+    <h3>📅 수업 일정 선택</h3>
+    <p id="modal-member-name">회원의 이번 주 수업 일정을 선택하세요</p>
+    <div id="cal-event-list"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-confirm" onclick="confirmSession()">수업 확정</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== STATE =====
+let members = [];
+let calendarEvents = [];
+let selectedMemberId = null;
+let selectedEventIds = [];
+let gapiLoaded = false;
+let googleUser = null;
+let CLIENT_ID = localStorage.getItem('google_client_id') || '';
+const SHEET_ID = '1ctEaItZRwKOqkRgCjQflGFRs8ui-llFnMMzqbY4wexs';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets';
+
+// ===== INIT =====
+function init() {
+  setWeekLabel();
+  if (CLIENT_ID && localStorage.getItem('google_authed')) {
+    loadGoogleAPI();
+  }
+}
+
+function setWeekLabel() {
+  const now = new Date();
+  const day = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
+  document.getElementById('week-label').textContent = `이번 주 (${now.getFullYear()})`;
+  document.getElementById('week-range').textContent = `${fmt(monday)} ~ ${fmt(sunday)}`;
+}
+
+function getWeekRange() {
+  const now = new Date();
+  const day = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  monday.setHours(0,0,0,0);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23,59,59,999);
+  return { start: monday, end: sunday };
+}
+
+// ===== GOOGLE SHEETS STORAGE =====
+let sheetName = null;
+
+async function getSheetName() {
+  if (sheetName) return sheetName;
+  const resp = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  sheetName = resp.result.sheets[0].properties.title;
+  return sheetName;
+}
+
+async function saveMembers() {
+  try {
+    const sheet = await getSheetName();
+    const values = members.map(m => [m.id, m.name, JSON.stringify(m.sessions || [])]);
+    await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId: SHEET_ID,
+      range: sheet + '!A:C'
+    });
+    if (values.length > 0) {
+      await gapi.client.sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: sheet + '!A1',
+        valueInputOption: 'RAW',
+        resource: { values }
+      });
+    }
+    showToast('✅ 저장 완료', 'success');
+  } catch(e) {
+    console.error('Sheets save error:', e);
+    showToast('저장 실패: ' + (e.message || ''), 'error');
+  }
+}
+
+async function loadMembers() {
+  try {
+    const sheet = await getSheetName();
+    const resp = await gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: sheet + '!A:C'
+    });
+    const rows = resp.result.values || [];
+    members = rows.map(row => ({
+      id: Number(row[0]) || Date.now(),
+      name: row[1] || '',
+      sessions: (() => { try { return JSON.parse(row[2] || '[]'); } catch(e) { return []; } })()
+    })).filter(m => m.name);
+  } catch(e) {
+    console.error('Sheets load error:', e);
+    members = [];
+  }
+}
+
+// ===== GOOGLE AUTH =====
+function saveClientId() {
+  const val = document.getElementById('client-id-input').value.trim();
+  if (!val || !val.includes('googleusercontent.com')) {
+    showToast('올바른 Client ID를 입력해주세요', 'error');
+    return;
+  }
+  CLIENT_ID = val;
+  localStorage.setItem('google_client_id', CLIENT_ID);
+  startGoogleAuth();
+}
+
+function startGoogleAuth() {
+  if (!CLIENT_ID) {
+    showToast('먼저 Google Client ID를 입력해주세요', 'error');
+    document.getElementById('client-id-input').focus();
+    return;
+  }
+  if (tokenClient) {
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  } else {
+    loadGoogleAPI();
+  }
+}
+
+let tokenClient = null;
+let accessToken = null;
+
+function loadGoogleAPI() {
+  // Load gapi (for calendar API calls)
+  const gapiScript = document.createElement('script');
+  gapiScript.src = 'https://apis.google.com/js/api.js';
+  gapiScript.onload = () => {
+    gapi.load('client', async () => {
+      await gapi.client.init({});
+      await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest');
+      await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/sheets/v4/rest');
+      gapiLoaded = true;
+      loadGSI();
+    });
+  };
+  gapiScript.onerror = () => showToast('Google API 로드 실패. 인터넷 연결을 확인해주세요', 'error');
+  document.head.appendChild(gapiScript);
+}
+
+function loadGSI() {
+  // Load Google Identity Services (new auth library)
+  const gsiScript = document.createElement('script');
+  gsiScript.src = 'https://accounts.google.com/gsi/client';
+  gsiScript.onload = () => initTokenClient();
+  gsiScript.onerror = () => showToast('Google 로그인 라이브러리 로드 실패', 'error');
+  document.head.appendChild(gsiScript);
+}
+
+function initTokenClient() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPES,
+    callback: (tokenResponse) => {
+      if (tokenResponse.error) {
+        showToast('로그인 실패: ' + tokenResponse.error, 'error');
+        return;
+      }
+      accessToken = tokenResponse.access_token;
+      gapi.client.setToken({ access_token: accessToken });
+      localStorage.setItem('google_authed', '1');
+      fetchUserEmail();
+    },
+    error_callback: (err) => {
+      showToast('로그인 오류: ' + (err.message || err.type || ''), 'error');
+    }
+  });
+  // Auto sign-in if previously authed
+  if (localStorage.getItem('google_authed')) {
+    tokenClient.requestAccessToken({ prompt: '' });
+  }
+}
+
+async function fetchUserEmail() {
+  try {
+    const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    const info = await resp.json();
+    onSignedIn(info.email || '');
+  } catch(e) {
+    onSignedIn('');
+  }
+}
+
+let autoSyncTimer = null;
+const AUTO_SYNC_INTERVAL = 30 * 60 * 1000;
+let nextSyncAt = null;
+let countdownTimer = null;
+
+async function onSignedIn(email) {
+  document.getElementById('auth-section').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+  const bar = document.getElementById('connected-bar');
+  bar.classList.add('show');
+  document.getElementById('connected-email').textContent = email;
+  // Load members from Sheets first
+  showToast('회원 데이터 불러오는 중...', '');
+  await loadMembers();
+  renderAll();
+  syncCalendar();
+  startAutoSync();
+}
+
+function startAutoSync() {
+  if (autoSyncTimer) clearInterval(autoSyncTimer);
+  autoSyncTimer = setInterval(() => syncCalendar(true), AUTO_SYNC_INTERVAL);
+  scheduleCountdown();
+}
+
+function scheduleCountdown() {
+  nextSyncAt = Date.now() + AUTO_SYNC_INTERVAL;
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    const remaining = Math.max(0, nextSyncAt - Date.now());
+    const min = Math.floor(remaining / 60000);
+    const sec = Math.floor((remaining % 60000) / 1000);
+    const el = document.getElementById('sync-countdown');
+    if (el) el.textContent = min + '분 ' + String(sec).padStart(2,'0') + '초 후 자동 동기화';
+    if (remaining === 0) nextSyncAt = Date.now() + AUTO_SYNC_INTERVAL;
+  }, 1000);
+}
+
+function disconnect() {
+  if (accessToken) {
+    google.accounts.oauth2.revoke(accessToken);
+    accessToken = null;
+  }
+  localStorage.removeItem('google_authed');
+  document.getElementById('auth-section').style.display = 'block';
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('connected-bar').classList.remove('show');
+  calendarEvents = [];
+  members.forEach(m => m.sessions = []);
+  saveMembers();
+  showToast('연결 해제됨');
+}
+
+// ===== CALENDAR SYNC =====
+async function syncCalendar(silent = false) {
+  const btn = document.getElementById('sync-btn');
+  const icon = document.getElementById('sync-icon');
+  btn.classList.add('loading');
+  icon.classList.add('spinning');
+  icon.textContent = '⏳';
+
+  try {
+    const { start, end } = getWeekRange();
+    const response = await gapi.client.calendar.events.list({
+      calendarId: 'primary',
+      timeMin: start.toISOString(),
+      timeMax: end.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 100
+    });
+
+    calendarEvents = (response.result.items || []).filter(e =>
+      e.status !== 'cancelled' && e.summary
+    );
+
+    // Auto-match members with calendar events
+    matchMembersToEvents();
+
+    if (!silent) showToast(`✅ ${calendarEvents.length}개 일정 불러옴`, 'success');
+    else showToast('🔄 자동 동기화 완료', 'success');
+    scheduleCountdown();
+    renderAll();
+  } catch (err) {
+    showToast('캘린더 동기화 실패: ' + (err.message || JSON.stringify(err)), 'error');
+  } finally {
+    btn.classList.remove('loading');
+    icon.classList.remove('spinning');
+    icon.textContent = '🔄';
+  }
+}
+
+function matchMembersToEvents() {
+  members.forEach(member => {
+    const matched = calendarEvents.filter(evt => {
+      const title = evt.summary || '';
+      return title.includes(member.name);
+    });
+
+    if (matched.length > 0) {
+      member.sessions = matched.map(evt => ({
+        id: evt.id,
+        title: evt.summary,
+        start: evt.start.dateTime || evt.start.date
+      }));
+    } else {
+      member.sessions = [];
+    }
+  });
+  saveMembers();
+}
+
+// ===== RENDER =====
+function renderAll() {
+  const noList = document.getElementById('no-session-list');
+  const hasList = document.getElementById('has-session-list');
+
+  const noSession = members.filter(m => m.sessions.length === 0);
+  const hasSession = members.filter(m => m.sessions.length > 0);
+
+  document.getElementById('stat-no-session').textContent = noSession.length;
+  document.getElementById('stat-has-session').textContent = hasSession.length;
+  document.getElementById('stat-total').textContent = members.length;
+
+  if (noSession.length === 0) {
+    noList.innerHTML = '<div class="empty">🎉 모든 회원이 이번 주 수업이 있어요!</div>';
+  } else {
+    noList.innerHTML = noSession.map(m => memberCard(m, false)).join('');
+  }
+
+  if (hasSession.length === 0) {
+    hasList.innerHTML = '<div class="empty">아직 수업 일정이 없어요</div>';
+  } else {
+    hasList.innerHTML = hasSession.map(m => memberCard(m, true)).join('');
+  }
+  renderSchedule();
+}
+
+function renderSchedule() {
+  const container = document.getElementById('schedule-days');
+  if (!container) return;
+  if (calendarEvents.length === 0) return;
+
+  const { start } = getWeekRange();
+  const now = new Date();
+  const days = ['월','화','수','목','금','토','일'];
+
+  // Show hours 7am - 11pm
+  const startHour = 7;
+  const endHour = 23;
+  const totalHours = endHour - startHour;
+  const hourHeight = 48;
+
+  // Time column
+  let timeHtml = '<div class="time-col"><div class="time-col-header"></div>';
+  for (let h = startHour; h < endHour; h++) {
+    const label = h < 12 ? `${h}AM` : h === 12 ? '12PM' : `${h-12}PM`;
+    timeHtml += `<div class="time-label">${label}</div>`;
+  }
+  timeHtml += '</div>';
+
+  // Days columns
+  let daysHtml = '<div class="days-grid">';
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(start);
+    day.setDate(start.getDate() + i);
+    const dayEnd = new Date(day); dayEnd.setHours(23,59,59,999);
+    const isToday = day.toDateString() === now.toDateString();
+
+    const dayEvents = calendarEvents.filter(evt => {
+      const d = new Date(evt.start.dateTime || evt.start.date);
+      return d >= day && d <= dayEnd && evt.start.dateTime;
+    });
+
+    daysHtml += `<div class="day-col">
+      <div class="day-col-header ${isToday ? 'today' : ''}">
+        <span class="dname">${days[i]}</span>
+        <span class="dnum">${day.getDate()}</span>
+      </div>
+      <div class="day-body" style="height:${totalHours * hourHeight}px">`;
+
+    // Hour grid lines
+    for (let h = 0; h < totalHours; h++) {
+      daysHtml += `<div class="hour-cell" style="position:absolute;top:${h*hourHeight}px;left:0;right:0;height:${hourHeight}px"></div>`;
+    }
+
+    // Current time line
+    if (isToday) {
+      const mins = (now.getHours() - startHour) * 60 + now.getMinutes();
+      const topPx = (mins / 60) * hourHeight;
+      if (topPx >= 0 && topPx <= totalHours * hourHeight) {
+        daysHtml += `<div class="now-line" style="top:${topPx}px"></div>`;
+      }
+    }
+
+    // Events
+    dayEvents.forEach(evt => {
+      const d = new Date(evt.start.dateTime);
+      const dEnd = evt.end && evt.end.dateTime ? new Date(evt.end.dateTime) : new Date(d.getTime() + 60*60*1000);
+      const isPast = dEnd < now;
+
+      const startMins = (d.getHours() - startHour) * 60 + d.getMinutes();
+      const durMins = (dEnd - d) / 60000;
+      const topPx = (startMins / 60) * hourHeight;
+      const heightPx = Math.max((durMins / 60) * hourHeight, 18);
+
+      if (topPx < 0 || topPx > totalHours * hourHeight) return;
+
+      const timeStr = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+      const title = (evt.summary || '').replace(/회원님/g,'').trim();
+
+      daysHtml += `<div class="cal-block ${isPast ? 'past' : 'upcoming'}" style="top:${topPx}px;height:${heightPx}px" title="${evt.summary || ''}">
+        <div class="blk-time">${timeStr}</div>
+        <div class="blk-name">${title}</div>
+      </div>`;
+    });
+
+    daysHtml += '</div></div>';
+  }
+  daysHtml += '</div>';
+
+  container.innerHTML = `<div class="schedule-grid">${timeHtml}${daysHtml}</div>`;
+}
+
+function memberCard(member, hasSession) {
+  const initial = member.name.charAt(0);
+  const now = new Date();
+
+  let tagClass = 'red', tagText = '미예약';
+  let avatarClass = 'red', cardClass = 'no-session';
+
+  if (hasSession) {
+    const allDone = member.sessions.every(s => new Date(s.start) < now);
+    const anyDone = member.sessions.some(s => new Date(s.start) < now);
+    if (allDone) {
+      tagClass = 'done'; tagText = '수업완료';
+      avatarClass = 'done'; cardClass = 'has-session done-session';
+    } else {
+      tagClass = 'green'; tagText = '예약됨';
+      avatarClass = 'green'; cardClass = 'has-session';
+    }
+  }
+
+  const sessionsHtml = hasSession
+    ? member.sessions.map(s => {
+        const d = new Date(s.start);
+        const isPast = d < now;
+        const label = isNaN(d) ? s.start : `${d.getMonth()+1}/${d.getDate()} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+        return `<span class="session-chip ${isPast ? 'done' : 'upcoming'}">${label}</span>`;
+      }).join('')
+    : '<span class="no-session-text">이번 주 수업 없음</span>';
+
+  return `
+    <div class="member-card ${cardClass}">
+      <div class="avatar ${avatarClass}">${initial}</div>
+      <div class="member-info">
+        <div class="member-name">
+          ${member.name}
+          <span class="tag ${tagClass}">${tagText}</span>
+        </div>
+        <div class="member-sessions">${sessionsHtml}</div>
+      </div>
+      <div class="member-actions">
+        <button class="icon-btn" title="일정 연결" onclick="openCalModal(${member.id})">📅</button>
+        <button class="icon-btn" title="삭제" onclick="removeMember(${member.id})">✕</button>
+      </div>
+    </div>
+  `;
+}
+
+// ===== MEMBER ACTIONS =====
+function toggleAddForm() {
+  const form = document.getElementById('add-form');
+  form.classList.toggle('open');
+  if (form.classList.contains('open')) {
+    document.getElementById('new-member-name').focus();
+  }
+}
+
+function addMember() {
+  const input = document.getElementById('new-member-name');
+  const name = input.value.trim();
+  if (!name) return;
+
+  const newMember = { id: Date.now(), name, sessions: [] };
+  members.push(newMember);
+  saveMembers();
+  input.value = '';
+  toggleAddForm();
+  renderAll();
+  showToast(`${name} 회원 추가됨`, 'success');
+}
+
+function removeMember(id) {
+  members = members.filter(m => m.id !== id);
+  saveMembers();
+  renderAll();
+}
+
+// ===== CALENDAR MODAL =====
+function openCalModal(memberId) {
+  selectedMemberId = memberId;
+  selectedEventIds = [];
+  const member = members.find(m => m.id === memberId);
+  document.getElementById('modal-member-name').textContent = `${member.name} 회원의 이번 주 수업을 선택하세요`;
+
+  const list = document.getElementById('cal-event-list');
+  if (calendarEvents.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:30px;font-size:13px">먼저 캘린더를 동기화해주세요</div>';
+  } else {
+    list.innerHTML = calendarEvents.map(evt => {
+      const d = new Date(evt.start.dateTime || evt.start.date);
+      const timeStr = isNaN(d) ? evt.start.date : `${['일','월','화','수','목','금','토'][d.getDay()]} ${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+      return `
+        <div class="cal-event" data-id="${evt.id}" onclick="toggleEvent(this,'${evt.id}','${(evt.summary||'').replace(/'/g,"\\'")}','${(evt.start.dateTime||evt.start.date).replace(/'/g,"\\'")}')">
+          <span class="time">${timeStr}</span>
+          <span class="title">${evt.summary || '(제목 없음)'}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  document.getElementById('cal-modal').classList.add('open');
+}
+
+function toggleEvent(el, id, title, start) {
+  el.classList.toggle('selected');
+  const idx = selectedEventIds.findIndex(e => e.id === id);
+  if (idx >= 0) {
+    selectedEventIds.splice(idx, 1);
+  } else {
+    selectedEventIds.push({ id, title, start });
+  }
+}
+
+function confirmSession() {
+  if (!selectedMemberId) return;
+  const member = members.find(m => m.id === selectedMemberId);
+  member.sessions = selectedEventIds;
+  saveMembers();
+  closeModal();
+  renderAll();
+  showToast(`${member.name} 수업 ${selectedEventIds.length}개 등록됨`, 'success');
+}
+
+function closeModal() {
+  document.getElementById('cal-modal').classList.remove('open');
+  selectedMemberId = null;
+  selectedEventIds = [];
+}
+
+// ===== TOAST =====
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ===== DEMO MODE (no auth) =====
+// Show main app with demo data for preview
+function showDemoMode() {
+  document.getElementById('auth-section').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+
+  // Fake some sessions for demo
+  if (members.length > 0) {
+    const now = new Date();
+    members[0].sessions = [{ id: 'demo1', title: members[0].name + ' PT', start: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 10, 0).toISOString() }];
+    if (members.length > 2) {
+      members[2].sessions = [{ id: 'demo2', title: members[2].name + ' PT', start: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2, 14, 0).toISOString() }];
+    }
+  }
+  renderAll();
+}
+
+// ===== CLOSE MODAL ON BG CLICK =====
+document.getElementById('cal-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ===== START =====
+init();
+
+// Check if already have a stored CLIENT_ID and show pre-filled
+if (CLIENT_ID) {
+  document.getElementById('client-id-input').value = CLIENT_ID;
+}
+
+// Show demo button
+setTimeout(() => {
+  if (document.getElementById('auth-section').style.display !== 'none') {
+    const demoBtn = document.createElement('button');
+    demoBtn.className = 'btn-sm';
+    demoBtn.style.cssText = 'margin-top:20px;background:transparent;border:1px solid var(--border);color:var(--text-muted);';
+    demoBtn.textContent = '🔍 로그인 없이 미리보기';
+    demoBtn.onclick = showDemoMode;
+    document.getElementById('auth-section').appendChild(demoBtn);
+  }
+}, 500);
+</script>
+</body>
+</html>
