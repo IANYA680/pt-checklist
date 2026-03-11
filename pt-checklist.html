@@ -1052,10 +1052,10 @@ async function getSheetName() {
 async function saveMembers() {
   try {
     const sheet = await getSheetName();
-    const values = members.map(m => [m.id, m.name, JSON.stringify(m.sessions || [])]);
+    const values = members.map(m => [m.id, m.name, JSON.stringify(m.sessions || []), m.remaining ?? '', m.attention ? '1' : '0', m.missedWeeks || 0]);
     await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: SHEET_ID,
-      range: sheet + '!A:C'
+      range: sheet + '!A:F'
     });
     if (values.length > 0) {
       await gapi.client.sheets.spreadsheets.values.update({
@@ -1083,7 +1083,10 @@ async function loadMembers() {
     members = rows.map(row => ({
       id: Number(row[0]) || Date.now(),
       name: row[1] || '',
-      sessions: (() => { try { return JSON.parse(row[2] || '[]'); } catch(e) { return []; } })()
+      sessions: (() => { try { return JSON.parse(row[2] || '[]'); } catch(e) { return []; } })(),
+      remaining: row[3] !== undefined && row[3] !== '' ? Number(row[3]) : undefined,
+      attention: row[4] === '1',
+      missedWeeks: Number(row[5]) || 0
     })).filter(m => m.name);
   } catch(e) {
     console.error('Sheets load error:', e);
