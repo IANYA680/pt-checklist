@@ -1198,11 +1198,12 @@ async function onSignedIn(email) {
   const bar = document.getElementById('connected-bar');
   bar.classList.add('show');
   document.getElementById('connected-email').textContent = email;
-  // Load members from Sheets first
+  // 1. 시트에서 회원 데이터 먼저 로드
   showToast('회원 데이터 불러오는 중...', '');
   await loadMembers();
   renderAll();
-  syncCalendar();
+  // 2. 로드 완료 후 캘린더 동기화
+  await syncCalendar();
   startAutoSync();
 }
 
@@ -1281,7 +1282,6 @@ async function syncCalendar(silent = false) {
 
 function matchMembersToEvents() {
   const now = new Date();
-  // 이번 주 월요일 날짜 (YYYY-MM-DD) — 주 단위 중복 방지용
   const { start } = getWeekRange();
   const thisWeekKey = start.toISOString().slice(0, 10);
 
@@ -1299,14 +1299,14 @@ function matchMembersToEvents() {
         title: evt.summary,
         start: evt.start.dateTime || evt.start.date
       }));
-      // 수업 있으면 missedWeeks 리셋
+
       if (weekOffset === 0) {
         member.missedWeeks = 0;
         member.lastMissedWeekKey = null;
       }
 
-      // 완료된 수업 자동 차감 (중복 방지)
-      if (weekOffset === 0 && member.remaining !== undefined) {
+      // 완료된 수업 자동 차감 (중복 방지) — remaining이 있을 때만
+      if (weekOffset === 0 && member.remaining !== undefined && member.remaining !== null && member.remaining !== '') {
         member.sessions.forEach(s => {
           const startTime = new Date(s.start);
           const isPast = startTime < now;
@@ -1318,13 +1318,14 @@ function matchMembersToEvents() {
       }
     } else {
       member.sessions = [];
-      // 이번 주(금주)일 때만 missedWeeks 누적 — 같은 주에 여러 번 동기화해도 1번만
       if (weekOffset === 0 && member.lastMissedWeekKey !== thisWeekKey) {
         member.missedWeeks = (member.missedWeeks || 0) + 1;
         member.lastMissedWeekKey = thisWeekKey;
       }
     }
   });
+
+  // sessions, missedWeeks만 저장 (remaining은 ⚙️에서만 저장)
   saveMembers();
 }
 
