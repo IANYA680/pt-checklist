@@ -846,6 +846,10 @@
     <div class="week-badge">
       <strong id="week-label">이번 주</strong>
       <span id="week-range">날짜 로딩 중...</span>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <button id="btn-this-week" onclick="selectWeek(0)" style="flex:1;padding:5px 10px;border-radius:6px;border:none;background:var(--accent);color:#000;font-weight:700;font-size:12px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">금주</button>
+        <button id="btn-next-week" onclick="selectWeek(1)" style="flex:1;padding:5px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">차주</button>
+      </div>
     </div>
   </div>
 
@@ -997,20 +1001,37 @@ function setWeekLabel() {
   const now = new Date();
   const day = now.getDay();
   const monday = new Date(now);
-  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + weekOffset * 7);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
 
   const fmt = d => `${d.getMonth()+1}/${d.getDate()}`;
-  document.getElementById('week-label').textContent = `이번 주 (${now.getFullYear()})`;
+  document.getElementById('week-label').textContent = weekOffset === 0 ? `이번 주 (${now.getFullYear()})` : `다음 주 (${now.getFullYear()})`;
   document.getElementById('week-range').textContent = `${fmt(monday)} ~ ${fmt(sunday)}`;
+}
+
+let weekOffset = 0; // 0 = 금주, 1 = 차주
+
+function selectWeek(offset) {
+  weekOffset = offset;
+  // Update button styles
+  document.getElementById('btn-this-week').style.background = offset === 0 ? 'var(--accent)' : 'transparent';
+  document.getElementById('btn-this-week').style.color = offset === 0 ? '#000' : 'var(--text-muted)';
+  document.getElementById('btn-this-week').style.border = offset === 0 ? 'none' : '1px solid var(--border)';
+  document.getElementById('btn-this-week').style.fontWeight = offset === 0 ? '700' : 'normal';
+  document.getElementById('btn-next-week').style.background = offset === 1 ? 'var(--accent)' : 'transparent';
+  document.getElementById('btn-next-week').style.color = offset === 1 ? '#000' : 'var(--text-muted)';
+  document.getElementById('btn-next-week').style.border = offset === 1 ? 'none' : '1px solid var(--border)';
+  document.getElementById('btn-next-week').style.fontWeight = offset === 1 ? '700' : 'normal';
+  setWeekLabel();
+  syncCalendar();
 }
 
 function getWeekRange() {
   const now = new Date();
   const day = now.getDay();
   const monday = new Date(now);
-  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + weekOffset * 7);
   monday.setHours(0,0,0,0);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
@@ -1140,7 +1161,8 @@ function initTokenClient() {
     },
     error_callback: (err) => {
       showToast('로그인 오류: ' + (err.message || err.type || ''), 'error');
-    }
+    },
+    ux_mode: 'popup',
   });
   // Auto sign-in if previously authed
   if (localStorage.getItem('google_authed')) {
