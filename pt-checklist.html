@@ -992,7 +992,7 @@ const _urlClientId = _urlParams.get('cid') || '';
 if (_urlClientId) localStorage.setItem('google_client_id', _urlClientId);
 let CLIENT_ID = localStorage.getItem('google_client_id') || '';
 let userSpreadsheetId = null; // 로그인 후 initUserSpreadsheet()에서 설정됨
-const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/drive.file email';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly email';
 
 // ===== INIT =====
 function init() {
@@ -1102,6 +1102,7 @@ async function _initUserSpreadsheet(email) {
 
     // Step 2: appProperties로 Drive 검색 (기기 무관 - 동일 Client ID면 공유됨)
     let foundId = null;
+    let driveSearchSucceeded = false;
     try {
       const safeEmail = String(email).replace(/'/g, "\\'");
       const q =
@@ -1156,6 +1157,11 @@ async function _initUserSpreadsheet(email) {
         console.warn('[PT] appProperties 업데이트 실패 (무시):', e.message);
       }
       return userSpreadsheetId;
+    }
+
+    // Step 3: Drive 검색이 성공했을 때만 새 파일 생성 (실패 시 권한 문제)
+    if (!driveSearchSucceeded) {
+      throw new Error('Drive 접근 권한이 없어요. 연결 해제 후 다시 로그인해주세요.');
     }
 
     // Step 3: 없으면 새 파일 생성
