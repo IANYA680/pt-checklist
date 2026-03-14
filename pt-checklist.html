@@ -992,7 +992,7 @@ const _urlClientId = _urlParams.get('cid') || '';
 if (_urlClientId) localStorage.setItem('google_client_id', _urlClientId);
 let CLIENT_ID = localStorage.getItem('google_client_id') || '';
 let userSpreadsheetId = null; // 로그인 후 initUserSpreadsheet()에서 설정됨
-const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets email';
 
 // ===== INIT =====
 function init() {
