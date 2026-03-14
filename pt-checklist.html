@@ -1566,12 +1566,14 @@ async function syncCalendar(silent = false) {
 }
 
 async function matchMembersToEvents() {
-  // null = 동기화 한 번도 안 됨 → 스킵
-  // [] = 이번 주 일정 없음 → 정상 처리 (sessions 비워야 함)
   if (calendarEvents === null) {
     console.warn('matchMembersToEvents: 아직 동기화 안 됨, 스킵');
     return;
   }
+
+  // 저장 전 최신 시트 데이터 로드 (다른 기기 변경사항 반영)
+  await loadMembers();
+
   const now = new Date();
   const { start } = getWeekRange();
   const thisWeekKey = start.toISOString().slice(0, 10);
