@@ -1311,9 +1311,13 @@ async function fetchUserEmail() {
       headers: { Authorization: 'Bearer ' + accessToken }
     });
     const info = await resp.json();
-    onSignedIn(info.email || '');
+    if (!info.email) {
+      showToast('이메일 정보를 가져올 수 없어요. 다시 로그인해주세요.', 'error');
+      return;
+    }
+    onSignedIn(info.email);
   } catch(e) {
-    onSignedIn('');
+    showToast('로그인 정보 확인 실패. 다시 시도해주세요.', 'error');
   }
 }
 
@@ -1337,9 +1341,12 @@ async function onSignedIn(email) {
   try {
     await initUserSpreadsheet(email);
   } catch (err) {
-    // initUserSpreadsheet 실패 시 UI 잠금 유지 + 재시도 버튼 표시
+    // initUserSpreadsheet 실패 시 로그인 화면으로 복구
+    document.getElementById('auth-section').style.display = 'block';
+    document.getElementById('main-app').style.display = 'none';
+    document.getElementById('connected-bar').classList.remove('show');
     setUILocked(false);
-    showToast('스프레드시트 초기화 실패. 네트워크를 확인하고 새로고침해주세요.', 'error');
+    showToast('스프레드시트 초기화 실패. 네트워크를 확인하고 다시 로그인해주세요.', 'error');
     isSignedIn = false; // 재시도 허용
     saveDisabled = true;
     return;
@@ -1469,7 +1476,6 @@ async function syncCalendar(silent = false) {
     await matchMembersToEvents();
 
     if (!silent) showToast(`✅ ${calendarEvents.length}개 일정 불러옴`, 'success');
-    else showToast('🔄 자동 동기화 완료', 'success');
     scheduleCountdown();
     renderAll();
   } catch (err) {
@@ -1897,7 +1903,7 @@ document.getElementById('cal-modal').addEventListener('click', function(e) {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && isSignedIn && !isSyncing) {
     // 백그라운드에서 다른 탭이 데이터를 변경했을 수 있으므로 재로드
-    loadMembers().then(() => { renderAll(); syncCalendar(true); });
+    loadMembers().then(() => { renderAll(); syncCalendar(true); }).catch(e => console.error('visibilitychange 재로드 실패:', e));
   }
 });
 
