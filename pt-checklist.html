@@ -878,7 +878,7 @@
       Google로 로그인
     </button>
 
-    <div class="api-setup">
+    <div class="api-setup" id="api-setup-section">
       <h3>⚙️ Google API 설정 방법</h3>
       <p>구글 캘린더 연동을 위해 아래 단계를 따라 Client ID를 발급받으세요:</p>
       <ol>
@@ -985,13 +985,23 @@ let selectedMemberId = null;
 let selectedEventIds = [];
 let gapiLoaded = false;
 let googleUser = null;
+// URL 파라미터 또는 localStorage에서 Client ID 읽기
+// 배포 시 URL에 ?cid=CLIENT_ID 형식으로 포함하면 입력 불필요
+const _urlParams = new URLSearchParams(window.location.search);
+const _urlClientId = _urlParams.get('cid') || '';
+if (_urlClientId) localStorage.setItem('google_client_id', _urlClientId);
 let CLIENT_ID = localStorage.getItem('google_client_id') || '';
-const SHEET_ID = '1ctEaItZRwKOqkRgCjQflGFRs8ui-llFnMMzqbY4wexs';
-const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets';
+let userSpreadsheetId = null; // 로그인 후 initUserSpreadsheet()에서 설정됨
+const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 
 // ===== INIT =====
 function init() {
   setWeekLabel();
+  // Client ID가 이미 있으면 API 설정 안내 숨기기
+  if (CLIENT_ID) {
+    const setupSection = document.getElementById('api-setup-section');
+    if (setupSection) setupSection.style.display = 'none';
+  }
   if (CLIENT_ID && localStorage.getItem('google_authed')) {
     loadGoogleAPI();
   }
@@ -1051,16 +1061,100 @@ function getWeekRange() {
   return { start: monday, end: sunday };
 }
 
+// ===== 유저별 스프레드시트 초기화 =====
+let spreadsheetInitPromise = null; // 중복 초기화 방지
+
+async function initUserSpreadsheet(email) {
+  // 이미 초기화 진행 중이면 같은 Promise 반환
+  if (spreadsheetInitPromise) return spreadsheetInitPromise;
+  if (userSpreadsheetId) return userSpreadsheetId;
+
+  spreadsheetInitPromise = _initUserSpreadsheet(email)
+    .finally(() => { spreadsheetInitPromise = null; });
+  return spreadsheetInitPromise;
+}
+
+async function _initUserSpreadsheet(email) {
+  const APP_MARKER_KEY = 'ptChecklist';
+  const APP_MARKER_VAL = 'v1';
+  const FILE_TITLE = 'PT Checklist DB (' + email + ')';
+
+  try {
+    // 1. 기존 파일 검색 (appProperties 마커 기준)
+    const searchResp = await gapi.client.drive.files.list({
+      q: "appProperties has { key='" + APP_MARKER_KEY + "' and value='" + APP_MARKER_VAL + "' } and trashed=false",
+      fields: 'files(id, name)',
+      spaces: 'drive'
+    });
+
+    const files = searchResp.result.files || [];
+
+    if (files.length > 0) {
+      // 기존 파일 발견 → 사용
+      userSpreadsheetId = files[0].id;
+      console.log('기존 스프레드시트 발견:', userSpreadsheetId);
+      return userSpreadsheetId;
+    }
+
+    // 2. 없으면 새 스프레드시트 생성
+    const createResp = await gapi.client.sheets.spreadsheets.create({
+      resource: {
+        properties: { title: FILE_TITLE }
+      }
+    });
+
+    const newId = createResp.result.spreadsheetId;
+
+    // 3. appProperties 마커 설정 전에 다시 한번 검색 (탭 중복 방어)
+    const recheckResp = await gapi.client.drive.files.list({
+      q: "appProperties has { key='" + APP_MARKER_KEY + "' and value='" + APP_MARKER_VAL + "' } and trashed=false",
+      fields: 'files(id, name)',
+      spaces: 'drive'
+    });
+    const recheckFiles = recheckResp.result.files || [];
+    if (recheckFiles.length > 0) {
+      // 다른 탭이 먼저 파일을 만들었음 → 새로 만든 파일 삭제 후 기존 파일 사용
+      console.warn('중복 생성 감지: 새 파일 삭제 후 기존 파일 사용', recheckFiles[0].id);
+      await gapi.client.drive.files.delete({ fileId: newId }).catch(() => {});
+      userSpreadsheetId = recheckFiles[0].id;
+      return userSpreadsheetId;
+    }
+
+    // 4. appProperties 마커 설정 (중복 생성 방지용)
+    await gapi.client.drive.files.update({
+      fileId: newId,
+      resource: {
+        appProperties: {
+          [APP_MARKER_KEY]: APP_MARKER_VAL,
+          ownerEmail: email
+        }
+      }
+    });
+
+    userSpreadsheetId = newId;
+    console.log('새 스프레드시트 생성:', userSpreadsheetId);
+    return userSpreadsheetId;
+
+  } catch (err) {
+    console.error('initUserSpreadsheet 실패:', err);
+    showToast('스프레드시트 초기화 실패: ' + (err.message || ''), 'error');
+    throw err;
+  }
+}
+
 // ===== GOOGLE SHEETS STORAGE =====
 let sheetName = null;
 let sheetNamePromise = null;
 
 async function getSheetName() {
   if (sheetName) return sheetName;
+  if (!userSpreadsheetId) throw new Error('userSpreadsheetId가 설정되지 않았습니다. 로그인 후 다시 시도하세요.');
   if (!sheetNamePromise) {
-    sheetNamePromise = gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID })
+    sheetNamePromise = gapi.client.sheets.spreadsheets.get({ spreadsheetId: userSpreadsheetId })
       .then(resp => {
-        sheetName = resp.result.sheets[0].properties.title;
+        const sheets = resp.result.sheets;
+        if (!sheets || sheets.length === 0) throw new Error('스프레드시트에 시트가 없습니다.');
+        sheetName = sheets[0].properties.title;
         sheetNamePromise = null;
         return sheetName;
       })
@@ -1095,26 +1189,31 @@ async function _saveMembers() {
     console.warn('saveMembers 중단: members가 유효하지 않음');
     return;
   }
+  // userSpreadsheetId 없으면 저장 안 함
+  if (!userSpreadsheetId) {
+    console.warn('saveMembers 중단: userSpreadsheetId가 없음');
+    return;
+  }
   try {
     const sheet = await getSheetName();
     const values = members.map(m => [m.id, m.name, JSON.stringify(m.sessions || []), m.remaining ?? '', m.attention ? '1' : '0', m.missedWeeks || 0, m.lastMissedWeekKey || '', JSON.stringify(m.deductedIds || [])]);
     if (values.length > 0) {
       // update 먼저 (데이터 있는 행)
       await gapi.client.sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
+        spreadsheetId: userSpreadsheetId,
         range: sheet + '!A1',
         valueInputOption: 'RAW',
         resource: { values }
       });
       // 이전보다 행이 줄었을 경우 (회원 삭제) 남은 행만 clear
       await gapi.client.sheets.spreadsheets.values.clear({
-        spreadsheetId: SHEET_ID,
+        spreadsheetId: userSpreadsheetId,
         range: sheet + '!A' + (values.length + 1) + ':H'
       });
     } else {
       // 회원 전체 삭제된 경우에만 clear
       await gapi.client.sheets.spreadsheets.values.clear({
-        spreadsheetId: SHEET_ID,
+        spreadsheetId: userSpreadsheetId,
         range: sheet + '!A:H'
       });
     }
@@ -1129,7 +1228,7 @@ async function loadMembers() {
   try {
     const sheet = await getSheetName();
     const resp = await gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
+      spreadsheetId: userSpreadsheetId,
       range: sheet + '!A:H'
     });
     const rows = resp.result.values || [];
@@ -1188,6 +1287,7 @@ function loadGoogleAPI() {
       await gapi.client.init({});
       await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest');
       await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/sheets/v4/rest');
+      await gapi.client.load('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest');
       gapiLoaded = true;
       loadGSI();
     });
@@ -1258,8 +1358,23 @@ async function onSignedIn(email) {
   const bar = document.getElementById('connected-bar');
   bar.classList.add('show');
   document.getElementById('connected-email').textContent = email;
+  showToast('스프레드시트 초기화 중...', '');
+  try {
+    await initUserSpreadsheet(email);
+  } catch (err) {
+    // initUserSpreadsheet 실패 시 UI 잠금 유지 + 재시도 버튼 표시
+    setUILocked(false);
+    showToast('스프레드시트 초기화 실패. 네트워크를 확인하고 새로고침해주세요.', 'error');
+    isSignedIn = false; // 재시도 허용
+    saveDisabled = true;
+    return;
+  }
   showToast('회원 데이터 불러오는 중...', '');
   await loadMembers();
+  // 드라이브 파일 삭제 후 재생성된 경우 경고
+  if (members.length === 0) {
+    showToast('⚠️ 회원 데이터가 없어요. 드라이브 파일이 삭제됐다면 데이터를 복구해주세요.', 'error');
+  }
   renderAll();
   setUILocked(false);
   // 2. 로드 완료 후 캘린더 동기화
@@ -1322,9 +1437,16 @@ function disconnect() {
   members = [];
   sheetName = null;
   sheetNamePromise = null;
+  userSpreadsheetId = null;
+  spreadsheetInitPromise = null;
   isSignedIn = false;
   isSyncing = false;
-  saveDisabled = true; // 큐에 쌓인 저장 작업 차단
+  saveDisabled = true;
+  saveMembersQueue = Promise.resolve(); // 큐 초기화
+  savePendingCount = 0;
+  weekOffset = 0; // 주 선택 초기화
+  selectedMemberId = null;
+  selectedEventIds = [];
   showToast('연결 해제됨');
 }
 
