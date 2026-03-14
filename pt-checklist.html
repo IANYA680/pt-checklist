@@ -992,7 +992,7 @@ const _urlClientId = _urlParams.get('cid') || '';
 if (_urlClientId) localStorage.setItem('google_client_id', _urlClientId);
 let CLIENT_ID = localStorage.getItem('google_client_id') || '';
 let userSpreadsheetId = null; // 로그인 후 initUserSpreadsheet()에서 설정됨
-const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file email';
+const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly email';
 
 // ===== INIT =====
 function init() {
@@ -1075,40 +1075,56 @@ async function initUserSpreadsheet(email) {
 }
 
 async function _initUserSpreadsheet(email) {
+  // drive.metadata.readonly 범위로 사용자 전체 파일 검색 가능
+  // → 기기 상관없이 동일 파일 찾음 (drive.file은 기기별 세션에 종속되어 ❌)
   const FILE_TITLE = 'PT Checklist DB (' + email + ')';
   const cacheKey = 'pt_sheet_id_' + email.replace(/[^a-z0-9]/gi, '_');
 
   try {
-    // 1. localStorage 캐시 확인
-    const cachedId = localStorage.getItem(cacheKey);
-    if (cachedId) {
+    // 1. Drive 검색 먼저 (모든 기기에서 동일한 결과 보장)
+    //    drive.metadata.readonly 범위 → 사용자의 모든 파일 메타데이터 조회 가능
+    let foundId = null;
+    try {
+      const searchResp = await gapi.client.drive.files.list({
+        q: "name = '" + FILE_TITLE.replace(/'/g, "\'") + "' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false",
+        fields: 'files(id, name, createdTime)',
+        orderBy: 'createdTime',  // 가장 먼저 만든 파일 사용 (중복 시 일관성)
+        spaces: 'drive',
+        pageSize: 5
+      });
+      const files = (searchResp.result.files || []);
+      if (files.length > 0) {
+        foundId = files[0].id; // 가장 오래된 파일 사용
+        console.log('Drive에서 파일 발견 (' + files.length + '개 중 첫 번째):', foundId);
+      }
+    } catch(e) {
+      console.warn('Drive 검색 실패:', e.message);
+    }
+
+    if (foundId) {
+      // 파일 접근 가능한지 검증
       try {
-        await gapi.client.sheets.spreadsheets.get({ spreadsheetId: cachedId });
-        userSpreadsheetId = cachedId;
-        console.log('캐시된 스프레드시트 사용:', userSpreadsheetId);
+        await gapi.client.sheets.spreadsheets.get({ spreadsheetId: foundId });
+        userSpreadsheetId = foundId;
+        localStorage.setItem(cacheKey, foundId); // 캐시 업데이트
         return userSpreadsheetId;
       } catch(e) {
-        console.warn('캐시된 파일 없음, 검색 시도');
-        localStorage.removeItem(cacheKey);
+        console.warn('찾은 파일 접근 불가:', e.message);
+        foundId = null;
       }
     }
 
-    // 2. Drive에서 같은 이름 파일 검색 (다른 기기에서 만든 파일 찾기)
-    try {
-      const searchResp = await gapi.client.drive.files.list({
-        q: "name = '" + FILE_TITLE + "' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false",
-        fields: 'files(id, name)',
-        spaces: 'drive'
-      });
-      const found = (searchResp.result.files || []);
-      if (found.length > 0) {
-        userSpreadsheetId = found[0].id;
-        localStorage.setItem(cacheKey, userSpreadsheetId);
-        console.log('Drive에서 기존 파일 발견:', userSpreadsheetId);
+    // 2. localStorage 캐시 확인 (Drive 검색 실패 시 fallback)
+    const cachedId = localStorage.getItem(cacheKey);
+    if (cachedId && cachedId !== foundId) {
+      try {
+        await gapi.client.sheets.spreadsheets.get({ spreadsheetId: cachedId });
+        userSpreadsheetId = cachedId;
+        console.log('캐시 fallback 사용:', userSpreadsheetId);
         return userSpreadsheetId;
+      } catch(e) {
+        localStorage.removeItem(cacheKey);
       }
-    } catch(e) {
-      console.warn('Drive 검색 실패, 새로 생성 진행');
     }
 
     // 3. 없으면 새 스프레드시트 생성
