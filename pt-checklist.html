@@ -969,6 +969,7 @@
     <div id="cal-event-list"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-cancel" onclick="clearSession()" style="color:#ff4d4d;border-color:#ff4d4d;">🗑 초기화</button>
       <button class="btn-confirm" onclick="confirmSession()">수업 확정</button>
     </div>
   </div>
@@ -2027,6 +2028,27 @@ async function confirmSession() {
   saveMembers();
   renderAll();
   showToast(`${member.name} 수업 ${savedEventIds.length}개 등록됨`, 'success');
+}
+
+async function clearSession() {
+  if (!selectedMemberId) return;
+  const savedMemberId = selectedMemberId;
+  if (!confirm('수업을 초기화하면 자동 매칭으로 돌아가요. 계속할까요?')) return;
+  closeModal();
+
+  try {
+    await loadMembers();
+  } catch(e) {
+    showToast('데이터 로드 실패로 초기화하지 못했어요.', 'error');
+    return;
+  }
+
+  const member = members.find(m => m.id === savedMemberId);
+  if (!member) return;
+  member.sessions = []; // 비우면 다음 동기화 시 자동 매칭 실행됨
+  saveMembers();
+  renderAll();
+  showToast('수업이 초기화됐어요. 다음 동기화 시 자동 매칭돼요.', 'success');
 }
 
 function closeModal() {
