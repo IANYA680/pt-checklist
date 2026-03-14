@@ -1075,18 +1075,13 @@ async function initUserSpreadsheet(email) {
 }
 
 async function _initUserSpreadsheet(email) {
-  // appProperties 기반 식별 구조:
-  // - 생성 시: drive.file 범위로 appProperties 설정
-  // - 검색 시: drive.metadata.readonly 범위로 appProperties 검색
-  // - appProperties는 같은 OAuth Client ID 앱의 모든 기기에서 공유됨
-  // - → PC에서 만든 파일을 모바일에서 찾을 수 있음
   const APP_KEY = 'ptChecklist';
   const APP_VAL = 'v2';
   const FILE_TITLE = 'PT Checklist DB (' + email + ')';
   const cacheKey = 'pt_sheet_id_' + email.replace(/[^a-z0-9]/gi, '_');
 
   try {
-    // Step 1: localStorage 캐시 먼저 확인 (빠른 경로)
+    // Step 1: localStorage 캐시 (빠른 경로)
     const cachedId = localStorage.getItem(cacheKey);
     if (cachedId) {
       try {
@@ -1095,58 +1090,59 @@ async function _initUserSpreadsheet(email) {
         console.log('[PT] 캐시 사용:', userSpreadsheetId);
         return userSpreadsheetId;
       } catch(e) {
-        console.warn('[PT] 캐시된 파일 접근 불가, Drive 검색으로 이동');
+        console.warn('[PT] 캐시 파일 없음, Drive 검색 진행');
         localStorage.removeItem(cacheKey);
       }
     }
 
-    // Step 2: appProperties로 Drive 검색 (기기 무관 - 동일 Client ID면 공유됨)
+    // Step 2-A: appProperties 검색
     let foundId = null;
     let driveSearchSucceeded = false;
     try {
-      const safeEmail = String(email).replace(/'/g, "\\'");
+      const safeEmail = String(email).replace(/'/g, "\'");
       const q =
         "appProperties has { key='" + APP_KEY + "' and value='" + APP_VAL + "' } " +
         "and appProperties has { key='ownerEmail' and value='" + safeEmail + "' } " +
         "and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false";
       const resp = await gapi.client.drive.files.list({
-        q: q,
-        fields: 'files(id, name, createdTime)',
-        orderBy: 'createdTime',
-        spaces: 'drive',
-        pageSize: 1
+        q: q, fields: 'files(id, name, createdTime)',
+        orderBy: 'createdTime', spaces: 'drive', pageSize: 1
       });
       const files = resp.result.files || [];
-      console.log('[PT] appProperties 검색 결과:', files.length, '개');
-      if (files.length > 0) {
-        foundId = files[0].id; // 가장 먼저 생성된 파일 사용
-        console.log('[PT] 기존 파일 발견:', foundId, files[0].name);
-      }
+      console.log('[PT] appProperties 검색:', files.length, '개');
+      driveSearchSucceeded = true;
+      if (files.length > 0) foundId = files[0].id;
     } catch(e) {
       console.error('[PT] appProperties 검색 실패:', e.status, e.message);
-      // 검색 실패 시 이름으로 재시도
+    }
+
+    // Step 2-B: 이름 검색 (appProperties에서 못 찾았을 때 항상 실행)
+    if (!foundId) {
       try {
-        const safeTitle = FILE_TITLE.replace(/'/g, "\\'");
+        const safeTitle = FILE_TITLE.replace(/'/g, "\'");
         const nameQ = "name = '" + safeTitle + "' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false";
         const resp2 = await gapi.client.drive.files.list({
-          q: nameQ,
-          fields: 'files(id, name, createdTime)',
-          orderBy: 'createdTime',
-          spaces: 'drive',
-          pageSize: 1
+          q: nameQ, fields: 'files(id, name, createdTime)',
+          orderBy: 'createdTime', spaces: 'drive', pageSize: 1
         });
         const files2 = resp2.result.files || [];
-        console.log('[PT] 이름 검색 결과:', files2.length, '개');
+        console.log('[PT] 이름 검색:', files2.length, '개');
+        driveSearchSucceeded = true;
         if (files2.length > 0) foundId = files2[0].id;
       } catch(e2) {
-        console.error('[PT] 이름 검색도 실패:', e2.status, e2.message);
+        console.error('[PT] 이름 검색 실패:', e2.status, e2.message);
       }
     }
 
+    // 두 검색 모두 실패 = Drive API 권한 없음
+    if (!driveSearchSucceeded) {
+      throw new Error('Drive 접근 권한이 없어요. 연결 해제 후 다시 로그인해주세요.');
+    }
+
+    // Step 3: 파일 발견 시 캐시 저장 + appProperties 업데이트
     if (foundId) {
       userSpreadsheetId = foundId;
       localStorage.setItem(cacheKey, foundId);
-      // appProperties가 없는 구형 파일이면 설정해줌 (이후 검색 가능하도록)
       try {
         await gapi.client.drive.files.update({
           fileId: foundId,
@@ -1154,29 +1150,25 @@ async function _initUserSpreadsheet(email) {
         });
         console.log('[PT] appProperties 업데이트 완료');
       } catch(e) {
-        console.warn('[PT] appProperties 업데이트 실패 (무시):', e.message);
+        console.warn('[PT] appProperties 업데이트 실패 (무시)');
       }
       return userSpreadsheetId;
     }
 
-    // Step 3: Drive 검색이 성공했을 때만 새 파일 생성 (실패 시 권한 문제)
-    if (!driveSearchSucceeded) {
-      throw new Error('Drive 접근 권한이 없어요. 연결 해제 후 다시 로그인해주세요.');
-    }
-
-    // Step 3: 없으면 새 파일 생성
-    console.log('[PT] 새 스프레드시트 생성 중...');
+    // Step 4: 없으면 새 파일 생성
+    console.log('[PT] 새 파일 생성 중...');
     const createResp = await gapi.client.sheets.spreadsheets.create({
       resource: { properties: { title: FILE_TITLE } }
     });
     const newId = createResp.result.spreadsheetId;
-
-    // appProperties 설정 (다음 기기 로그인 시 찾을 수 있도록)
-    await gapi.client.drive.files.update({
-      fileId: newId,
-      resource: { appProperties: { [APP_KEY]: APP_VAL, ownerEmail: email } }
-    });
-
+    try {
+      await gapi.client.drive.files.update({
+        fileId: newId,
+        resource: { appProperties: { [APP_KEY]: APP_VAL, ownerEmail: email } }
+      });
+    } catch(e) {
+      console.warn('[PT] 새 파일 appProperties 설정 실패 (무시)');
+    }
     localStorage.setItem(cacheKey, newId);
     userSpreadsheetId = newId;
     console.log('[PT] 새 파일 생성 완료:', userSpreadsheetId);
@@ -1291,6 +1283,7 @@ async function loadMembers() {
     })).filter(m => m.name);
   } catch(e) {
     console.error('Sheets load error:', e);
+    showToast('회원 데이터 로드 실패: ' + (e.message || ''), 'error');
     // 로드 실패시 members 초기화 안 함 (기존 데이터 보호)
   }
 }
@@ -1860,10 +1853,14 @@ function toggleAddForm() {
   }
 }
 
-function addMember() {
+async function addMember() {
   const input = document.getElementById('new-member-name');
   const name = input.value.trim();
   if (!name) return;
+
+  // 저장 전 최신 데이터 로드 (다른 기기에서 추가한 회원 반영)
+  await loadMembers();
+  renderAll();
 
   if (members.some(m => m.name === name)) {
     showToast('이미 같은 이름의 회원이 있어요', 'error');
