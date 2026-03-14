@@ -1832,14 +1832,20 @@ function openMemberSettings(id) {
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
-function saveMemberSettings(id) {
-  const member = members.find(m => m.id === id);
-  if (!member) return;
+async function saveMemberSettings(id) {
   const val = document.getElementById('settings-remaining').value;
   const parsed = parseInt(val);
-  member.remaining = (val !== '' && !isNaN(parsed)) ? parsed : undefined;
-  member.attention = document.getElementById('settings-attention').checked;
+  const newRemaining = (val !== '' && !isNaN(parsed)) ? parsed : undefined;
+  const newAttention = document.getElementById('settings-attention').checked;
   document.getElementById('settings-modal').remove();
+
+  // 저장 전 최신 데이터 로드
+  await loadMembers();
+
+  const member = members.find(m => m.id === id);
+  if (!member) return;
+  member.remaining = newRemaining;
+  member.attention = newAttention;
   saveMembers();
   renderAll();
 }
@@ -1875,10 +1881,14 @@ async function addMember() {
   showToast(`${name} 회원 추가됨`, 'success');
 }
 
-function removeMember(id) {
+async function removeMember(id) {
   const member = members.find(m => m.id === id);
   if (!member) return;
   if (!confirm(`"${member.name}" 회원을 삭제할까요? 이 작업은 되돌릴 수 없어요.`)) return;
+
+  // 삭제 전 최신 데이터 로드 (다른 기기 변경사항 반영)
+  await loadMembers();
+
   members = members.filter(m => m.id !== id);
   saveMembers();
   renderAll();
