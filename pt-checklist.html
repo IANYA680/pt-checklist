@@ -1099,7 +1099,7 @@ async function _initUserSpreadsheet(email) {
     let foundId = null;
     let driveSearchSucceeded = false;
     try {
-      const safeEmail = String(email).replace(/'/g, "\'");
+      const safeEmail = String(email).replace(/'/g, "\\'");
       const q =
         "appProperties has { key='" + APP_KEY + "' and value='" + APP_VAL + "' } " +
         "and appProperties has { key='ownerEmail' and value='" + safeEmail + "' } " +
@@ -1208,6 +1208,7 @@ async function getSheetName() {
 // 저장 직렬화 큐 + debounce (연속 저장 요청은 마지막 것만 실행)
 let saveMembersQueue = Promise.resolve();
 let saveDisabled = false; // disconnect 후 저장 차단
+let isLoadingMembers = false; // 동시 loadMembers 실행 차단
 let savePendingCount = 0; // 큐에 쌓인 미실행 저장 수
 function saveMembers() {
   if (saveDisabled) return Promise.resolve();
@@ -1264,6 +1265,16 @@ async function _saveMembers() {
 }
 
 async function loadMembers() {
+  if (isLoadingMembers) {
+    // 이미 로딩 중이면 완료까지 대기 후 반환 (동시 실행 차단)
+    let waited = 0;
+    while (isLoadingMembers && waited < 5000) {
+      await new Promise(r => setTimeout(r, 100));
+      waited += 100;
+    }
+    return;
+  }
+  isLoadingMembers = true;
   try {
     const sheet = await getSheetName();
     const resp = await gapi.client.sheets.spreadsheets.values.get({
@@ -1285,6 +1296,9 @@ async function loadMembers() {
     console.error('Sheets load error:', e);
     showToast('회원 데이터 로드 실패: ' + (e.message || ''), 'error');
     // 로드 실패시 members 초기화 안 함 (기존 데이터 보호)
+    throw e; // 호출자가 실패 감지 가능하도록 re-throw
+  } finally {
+    isLoadingMembers = false;
   }
 }
 
@@ -1490,6 +1504,7 @@ function disconnect() {
   isSyncing = false;
   saveDisabled = true;
   saveMembersQueue = Promise.resolve(); // 큐 초기화
+  isLoadingMembers = false;
   savePendingCount = 0;
   weekOffset = 0; // 주 선택 초기화
   selectedMemberId = null;
@@ -1530,7 +1545,7 @@ async function syncCalendar(silent = false) {
       timeMax: end.toISOString(),
       singleEvents: true,
       orderBy: 'startTime',
-      maxResults: 100
+      maxResults: 250
     });
 
     calendarEvents = (response.result.items || []).filter(e =>
@@ -1546,7 +1561,8 @@ async function syncCalendar(silent = false) {
   } catch (err) {
     // 토큰 만료(401) 시 자동 재로그인 시도
     const errStr = JSON.stringify(err);
-    if (errStr.includes('401') || errStr.includes('unauthorized') || errStr.includes('invalid_token')) {
+    const errStatus = err?.status || err?.result?.error?.code || 0;
+    if (errStatus === 401 || errStr.includes('unauthorized') || errStr.includes('invalid_token')) {
       showToast('세션 만료 — 재로그인 중...', 'error');
       localStorage.removeItem('google_authed');
       isSignedIn = false; // onSignedIn 재진입 허용
@@ -1573,10 +1589,11 @@ async function matchMembersToEvents() {
 
   // 저장 전 최신 시트 데이터 로드 (다른 기기 변경사항 반영)
   // 실패 시 저장 중단 (기존 데이터 보호)
-  const prevCount = members.length;
-  await loadMembers();
-  if (members.length === 0 && prevCount > 0) {
+  try {
+    await loadMembers();
+  } catch(e) {
     console.warn('matchMembersToEvents: loadMembers 실패로 저장 중단');
+    renderAll(); // UI는 현재 상태로 갱신
     return;
   }
 
@@ -1627,6 +1644,15 @@ async function matchMembersToEvents() {
 }
 
 // ===== RENDER =====
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 function renderAll() {
   const noList = document.getElementById('no-session-list');
   const hasList = document.getElementById('has-session-list');
@@ -1741,7 +1767,8 @@ function renderSchedule() {
 }
 
 function memberCard(member, hasSession) {
-  const initial = member.name.charAt(0);
+  const safeName = escapeHtml(member.name);
+  const initial = safeName.charAt(0);
   const now = new Date();
 
   let tagClass = 'red', tagText = '미예약';
@@ -1793,7 +1820,7 @@ function memberCard(member, hasSession) {
       <div class="avatar ${avatarClass}">${initial}</div>
       <div class="member-info">
         <div class="member-name">
-          ${member.name}
+          ${safeName}
           <span class="tag ${tagClass}">${tagText}</span>
           ${remainingHtml}
           ${attentionHtml}
@@ -1818,7 +1845,7 @@ function openMemberSettings(id) {
   const html = `
     <div class="modal-bg" id="settings-modal" style="display:flex;">
       <div class="modal">
-        <h3>⚙️ ${member.name} 설정</h3>
+        <h3>⚙️ ${escapeHtml(member.name)} 설정</h3>
         <div style="margin:16px 0;">
           <label style="font-size:13px;color:var(--text-muted);display:block;margin-bottom:6px;">잔여 세션 수</label>
           <input type="number" id="settings-remaining" value="${remaining}" min="0" placeholder="예: 10"
@@ -1895,7 +1922,19 @@ async function removeMember(id) {
   if (!confirm(`"${member.name}" 회원을 삭제할까요? 이 작업은 되돌릴 수 없어요.`)) return;
 
   // 삭제 전 최신 데이터 로드 (다른 기기 변경사항 반영)
-  await loadMembers();
+  try {
+    await loadMembers();
+  } catch(e) {
+    showToast('데이터 로드 실패로 삭제하지 못했어요.', 'error');
+    return;
+  }
+
+  // 로드 후 재확인 (다른 기기에서 이미 삭제됐을 수 있음)
+  if (!members.find(m => m.id === id)) {
+    showToast('이미 삭제된 회원이에요.', 'error');
+    renderAll();
+    return;
+  }
 
   members = members.filter(m => m.id !== id);
   saveMembers();
@@ -1939,15 +1978,29 @@ function toggleEvent(el, id, title, start) {
   }
 }
 
-function confirmSession() {
+async function confirmSession() {
   if (!selectedMemberId) return;
-  const member = members.find(m => m.id === selectedMemberId);
-  if (!member) return;
-  member.sessions = selectedEventIds;
-  saveMembers();
+  const savedMemberId = selectedMemberId;
+  const savedEventIds = [...selectedEventIds]; // stale state 방지 - 복사본 저장
   closeModal();
+
+  // 저장 전 최신 데이터 로드 (다른 기기 변경사항 반영)
+  try {
+    await loadMembers();
+  } catch(e) {
+    showToast('데이터 로드 실패로 저장하지 못했어요.', 'error');
+    return;
+  }
+
+  const member = members.find(m => m.id === savedMemberId);
+  if (!member) {
+    showToast('회원 정보를 찾을 수 없어요.', 'error');
+    return;
+  }
+  member.sessions = savedEventIds;
+  saveMembers();
   renderAll();
-  showToast(`${member.name} 수업 ${selectedEventIds.length}개 등록됨`, 'success');
+  showToast(`${member.name} 수업 ${savedEventIds.length}개 등록됨`, 'success');
 }
 
 function closeModal() {
@@ -1990,7 +2043,9 @@ document.getElementById('cal-modal').addEventListener('click', function(e) {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && isSignedIn && !isSyncing) {
     // 백그라운드에서 다른 탭이 데이터를 변경했을 수 있으므로 재로드
-    loadMembers().then(() => { renderAll(); syncCalendar(true); }).catch(e => console.error('visibilitychange 재로드 실패:', e));
+    // syncCalendar → matchMembersToEvents → loadMembers 순으로 실행됨
+    // 별도 loadMembers 불필요 (중복 실행 방지)
+    syncCalendar(true);
   }
 });
 
