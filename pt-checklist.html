@@ -1601,13 +1601,41 @@ async function matchMembersToEvents() {
   const { start } = getWeekRange();
   const thisWeekKey = start.toISOString().slice(0, 10);
 
+  // 현재 주의 캘린더 이벤트 ID 목록 (유효성 확인용)
+  const calEventIds = new Set(calendarEvents.map(e => e.id));
+
   members.forEach(member => {
+    if (!member.deductedIds) member.deductedIds = [];
+
+    // 이미 수동 등록된 세션이 현재 주 캘린더에 존재하면 → 유지 (덮어쓰기 금지)
+    const hasValidManualSessions = member.sessions && member.sessions.length > 0
+      && member.sessions.every(s => calEventIds.has(s.id));
+
+    if (hasValidManualSessions) {
+      // 수동 세션 유지 + 잔여 차감만 처리
+      if (weekOffset === 0) {
+        member.missedWeeks = 0;
+        member.lastMissedWeekKey = null;
+      }
+      if (weekOffset === 0 && member.remaining !== undefined && member.remaining !== null && member.remaining !== '') {
+        member.sessions.forEach(s => {
+          const startTime = new Date(s.start);
+          const isPast = startTime < now;
+          if (isPast && !member.deductedIds.includes(s.id)) {
+            member.remaining = Math.max(0, (member.remaining || 0) - 1);
+            member.deductedIds.push(s.id);
+            if (member.deductedIds.length > 200) member.deductedIds = member.deductedIds.slice(-200);
+          }
+        });
+      }
+      return; // 자동 매칭 스킵
+    }
+
+    // 수동 세션 없거나 만료됐으면 → 이름 기반 자동 매칭
     const matched = calendarEvents.filter(evt => {
       const title = evt.summary || '';
       return title.startsWith(member.name);
     });
-
-    if (!member.deductedIds) member.deductedIds = [];
 
     if (matched.length > 0) {
       member.sessions = matched.map(evt => ({
@@ -1619,7 +1647,6 @@ async function matchMembersToEvents() {
         member.missedWeeks = 0;
         member.lastMissedWeekKey = null;
       }
-      // 완료된 수업 자동 차감 (중복 방지)
       if (weekOffset === 0 && member.remaining !== undefined && member.remaining !== null && member.remaining !== '') {
         member.sessions.forEach(s => {
           const startTime = new Date(s.start);
@@ -1627,7 +1654,6 @@ async function matchMembersToEvents() {
           if (isPast && !member.deductedIds.includes(s.id)) {
             member.remaining = Math.max(0, (member.remaining || 0) - 1);
             member.deductedIds.push(s.id);
-            // 오래된 항목 제거 (셀 크기 제한 방지: 최근 200개만 유지)
             if (member.deductedIds.length > 200) member.deductedIds = member.deductedIds.slice(-200);
           }
         });
