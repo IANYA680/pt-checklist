@@ -980,7 +980,7 @@
 <script>
 // ===== STATE =====
 let members = [];
-let calendarEvents = [];
+let calendarEvents = null; // null = 아직 동기화 안 됨, [] = 동기화했는데 일정 없음
 let selectedMemberId = null;
 let selectedEventIds = [];
 let gapiLoaded = false;
@@ -1012,8 +1012,20 @@ function setWeekLabel() {
 
 let weekOffset = 0; // 0 = 금주, 1 = 차주
 
-function selectWeek(offset) {
+async function selectWeek(offset) {
+  // 동기화 중이면 완료 후 재실행 (최대 15회 = 3초 대기)
+  if (isSyncing) {
+    let waitCount = 0;
+    const waitAndRun = () => {
+      if (!isSyncing) { selectWeek(offset); return; }
+      if (++waitCount >= 15) { showToast('동기화가 너무 오래 걸려요. 잠시 후 다시 시도해주세요.', 'error'); return; }
+      setTimeout(waitAndRun, 200);
+    };
+    setTimeout(waitAndRun, 200);
+    return;
+  }
   weekOffset = offset;
+  calendarEvents = null; // null = 재동기화 필요 ([] 이면 matchMembersToEvents가 sessions 초기화함)
   // Update button styles
   document.getElementById('btn-this-week').style.background = offset === 0 ? 'var(--accent)' : 'transparent';
   document.getElementById('btn-this-week').style.color = offset === 0 ? '#000' : 'var(--text-muted)';
@@ -1024,7 +1036,7 @@ function selectWeek(offset) {
   document.getElementById('btn-next-week').style.border = offset === 1 ? 'none' : '1px solid var(--border)';
   document.getElementById('btn-next-week').style.fontWeight = offset === 1 ? '700' : 'normal';
   setWeekLabel();
-  syncCalendar();
+  await syncCalendar();
 }
 
 function getWeekRange() {
@@ -1041,28 +1053,69 @@ function getWeekRange() {
 
 // ===== GOOGLE SHEETS STORAGE =====
 let sheetName = null;
+let sheetNamePromise = null;
 
 async function getSheetName() {
   if (sheetName) return sheetName;
-  const resp = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  sheetName = resp.result.sheets[0].properties.title;
-  return sheetName;
+  if (!sheetNamePromise) {
+    sheetNamePromise = gapi.client.sheets.spreadsheets.get({ spreadsheetId: SHEET_ID })
+      .then(resp => {
+        sheetName = resp.result.sheets[0].properties.title;
+        sheetNamePromise = null;
+        return sheetName;
+      })
+      .catch(err => {
+        sheetNamePromise = null; // 실패 시 캐싱 해제 → 다음 호출에서 재시도 가능
+        throw err;
+      });
+  }
+  return sheetNamePromise;
 }
 
-async function saveMembers() {
+// 저장 직렬화 큐 + debounce (연속 저장 요청은 마지막 것만 실행)
+let saveMembersQueue = Promise.resolve();
+let saveDisabled = false; // disconnect 후 저장 차단
+let savePendingCount = 0; // 큐에 쌓인 미실행 저장 수
+function saveMembers() {
+  if (saveDisabled) return Promise.resolve();
+  savePendingCount++;
+  saveMembersQueue = saveMembersQueue.then(() => {
+    if (saveDisabled) { savePendingCount = 0; return; }
+    savePendingCount--;
+    // 아직 뒤에 더 쌓여있으면 이번 건 스킵 (마지막 것만 실제 저장)
+    if (savePendingCount > 0) return;
+    return _saveMembers();
+  }).catch(e => { savePendingCount = 0; console.error('saveMembers queue error:', e); });
+  return saveMembersQueue;
+}
+
+async function _saveMembers() {
+  // members가 null/undefined면 저장 안 함
+  if (!members || !Array.isArray(members)) {
+    console.warn('saveMembers 중단: members가 유효하지 않음');
+    return;
+  }
   try {
     const sheet = await getSheetName();
     const values = members.map(m => [m.id, m.name, JSON.stringify(m.sessions || []), m.remaining ?? '', m.attention ? '1' : '0', m.missedWeeks || 0, m.lastMissedWeekKey || '', JSON.stringify(m.deductedIds || [])]);
-    await gapi.client.sheets.spreadsheets.values.clear({
-      spreadsheetId: SHEET_ID,
-      range: sheet + '!A:H'
-    });
     if (values.length > 0) {
+      // update 먼저 (데이터 있는 행)
       await gapi.client.sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
         range: sheet + '!A1',
         valueInputOption: 'RAW',
         resource: { values }
+      });
+      // 이전보다 행이 줄었을 경우 (회원 삭제) 남은 행만 clear
+      await gapi.client.sheets.spreadsheets.values.clear({
+        spreadsheetId: SHEET_ID,
+        range: sheet + '!A' + (values.length + 1) + ':H'
+      });
+    } else {
+      // 회원 전체 삭제된 경우에만 clear
+      await gapi.client.sheets.spreadsheets.values.clear({
+        spreadsheetId: SHEET_ID,
+        range: sheet + '!A:H'
       });
     }
     showToast('✅ 저장 완료', 'success');
@@ -1081,7 +1134,7 @@ async function loadMembers() {
     });
     const rows = resp.result.values || [];
     members = rows.map(row => ({
-      id: Number(row[0]) || Date.now(),
+      id: Number(row[0]) || (Date.now() + Math.floor(Math.random() * 1000)),
       name: row[1] || '',
       sessions: (() => { try { return JSON.parse(row[2] || '[]'); } catch(e) { return []; } })(),
       remaining: row[3] !== undefined && row[3] !== '' ? Number(row[3]) : undefined,
@@ -1092,7 +1145,7 @@ async function loadMembers() {
     })).filter(m => m.name);
   } catch(e) {
     console.error('Sheets load error:', e);
-    members = [];
+    // 로드 실패시 members 초기화 안 함 (기존 데이터 보호)
   }
 }
 
@@ -1123,9 +1176,11 @@ function startGoogleAuth() {
 
 let tokenClient = null;
 let accessToken = null;
+let isSignedIn = false;
 
 function loadGoogleAPI() {
-  // Load gapi (for calendar API calls)
+  // 중복 로드 방지
+  if (document.querySelector('script[src="https://apis.google.com/js/api.js"]')) return;
   const gapiScript = document.createElement('script');
   gapiScript.src = 'https://apis.google.com/js/api.js';
   gapiScript.onload = () => {
@@ -1193,18 +1248,42 @@ let nextSyncAt = null;
 let countdownTimer = null;
 
 async function onSignedIn(email) {
+  if (isSignedIn) return; // 중복 호출 방지 (토큰 갱신 후 재호출 방어)
+  isSignedIn = true;
+  saveDisabled = false; // 저장 재활성화
   document.getElementById('auth-section').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
+  // main-app 보이자마자 즉시 잠금 (gap 없음)
+  setUILocked(true);
   const bar = document.getElementById('connected-bar');
   bar.classList.add('show');
   document.getElementById('connected-email').textContent = email;
-  // 1. 시트에서 회원 데이터 먼저 로드
   showToast('회원 데이터 불러오는 중...', '');
   await loadMembers();
   renderAll();
+  setUILocked(false);
   // 2. 로드 완료 후 캘린더 동기화
   await syncCalendar();
   startAutoSync();
+}
+
+function setUILocked(locked) {
+  const addBtn = document.querySelector('.btn-add');
+  const syncBtn = document.getElementById('sync-btn');
+  const weekBtns = document.querySelectorAll('#btn-this-week, #btn-next-week');
+  // memberCard 내 icon-btn들도 잠금 (로딩 중 삭제/수정 방지)
+  const iconBtns = document.querySelectorAll('.icon-btn');
+  if (addBtn) addBtn.style.pointerEvents = locked ? 'none' : '';
+  if (addBtn) addBtn.style.opacity = locked ? '0.4' : '';
+  if (syncBtn) syncBtn.style.pointerEvents = locked ? 'none' : '';
+  weekBtns.forEach(b => {
+    b.style.pointerEvents = locked ? 'none' : '';
+    b.style.opacity = locked ? '0.4' : '';
+  });
+  iconBtns.forEach(b => {
+    b.style.pointerEvents = locked ? 'none' : '';
+    b.style.opacity = locked ? '0.4' : '';
+  });
 }
 
 function startAutoSync() {
@@ -1217,16 +1296,20 @@ function scheduleCountdown() {
   nextSyncAt = Date.now() + AUTO_SYNC_INTERVAL;
   if (countdownTimer) clearInterval(countdownTimer);
   countdownTimer = setInterval(() => {
-    const remaining = Math.max(0, nextSyncAt - Date.now());
-    const min = Math.floor(remaining / 60000);
-    const sec = Math.floor((remaining % 60000) / 1000);
+    const timeRemaining = Math.max(0, nextSyncAt - Date.now());
+    const min = Math.floor(timeRemaining / 60000);
+    const sec = Math.floor((timeRemaining % 60000) / 1000);
     const el = document.getElementById('sync-countdown');
     if (el) el.textContent = min + '분 ' + String(sec).padStart(2,'0') + '초 후 자동 동기화';
-    if (remaining === 0) nextSyncAt = Date.now() + AUTO_SYNC_INTERVAL;
+    if (timeRemaining === 0) nextSyncAt = Date.now() + AUTO_SYNC_INTERVAL;
   }, 1000);
 }
 
 function disconnect() {
+  if (autoSyncTimer) clearInterval(autoSyncTimer);
+  if (countdownTimer) clearInterval(countdownTimer);
+  autoSyncTimer = null;
+  countdownTimer = null;
   if (accessToken) {
     google.accounts.oauth2.revoke(accessToken);
     accessToken = null;
@@ -1235,19 +1318,40 @@ function disconnect() {
   document.getElementById('auth-section').style.display = 'block';
   document.getElementById('main-app').style.display = 'none';
   document.getElementById('connected-bar').classList.remove('show');
-  calendarEvents = [];
-  members.forEach(m => m.sessions = []);
-  saveMembers();
+  calendarEvents = null;
+  members = [];
+  sheetName = null;
+  sheetNamePromise = null;
+  isSignedIn = false;
+  isSyncing = false;
+  saveDisabled = true; // 큐에 쌓인 저장 작업 차단
   showToast('연결 해제됨');
 }
 
 // ===== CALENDAR SYNC =====
+let isSyncing = false;
 async function syncCalendar(silent = false) {
+  if (isSyncing) {
+    console.warn('syncCalendar 중복 호출 무시 (이미 동기화 중)');
+    return;
+  }
+  isSyncing = true;
   const btn = document.getElementById('sync-btn');
   const icon = document.getElementById('sync-icon');
-  btn.classList.add('loading');
-  icon.classList.add('spinning');
-  icon.textContent = '⏳';
+  btn?.classList.add('loading');
+  icon?.classList.add('spinning');
+  if (icon) icon.textContent = '⏳';
+
+  // 30초 타임아웃 (무한 대기 방지)
+  const syncTimeout = setTimeout(() => {
+    if (isSyncing) {
+      isSyncing = false;
+      btn?.classList.remove('loading');
+      icon?.classList.remove('spinning');
+      if (icon) icon.textContent = '🔄';
+      showToast('동기화 시간 초과. 네트워크를 확인해주세요.', 'error');
+    }
+  }, 30000);
 
   try {
     const { start, end } = getWeekRange();
@@ -1265,22 +1369,41 @@ async function syncCalendar(silent = false) {
     );
 
     // Auto-match members with calendar events
-    matchMembersToEvents();
+    await matchMembersToEvents();
 
     if (!silent) showToast(`✅ ${calendarEvents.length}개 일정 불러옴`, 'success');
     else showToast('🔄 자동 동기화 완료', 'success');
     scheduleCountdown();
     renderAll();
   } catch (err) {
-    showToast('캘린더 동기화 실패: ' + (err.message || JSON.stringify(err)), 'error');
+    // 토큰 만료(401) 시 자동 재로그인 시도
+    const errStr = JSON.stringify(err);
+    if (errStr.includes('401') || errStr.includes('unauthorized') || errStr.includes('invalid_token')) {
+      showToast('세션 만료 — 재로그인 중...', 'error');
+      localStorage.removeItem('google_authed');
+      isSignedIn = false; // onSignedIn 재진입 허용
+      // isSyncing은 finally에서 해제 (catch에서 건드리면 finally 전에 신규 sync 진입 가능)
+      if (tokenClient) setTimeout(() => tokenClient.requestAccessToken({ prompt: '' }), 0);
+    } else {
+      showToast('캘린더 동기화 실패: ' + (err.message || errStr), 'error');
+    }
+    renderAll();
   } finally {
-    btn.classList.remove('loading');
-    icon.classList.remove('spinning');
-    icon.textContent = '🔄';
+    clearTimeout(syncTimeout);
+    isSyncing = false;
+    btn?.classList.remove('loading');
+    icon?.classList.remove('spinning');
+    if (icon) icon.textContent = '🔄';
   }
 }
 
-function matchMembersToEvents() {
+async function matchMembersToEvents() {
+  // null = 동기화 한 번도 안 됨 → 스킵
+  // [] = 이번 주 일정 없음 → 정상 처리 (sessions 비워야 함)
+  if (calendarEvents === null) {
+    console.warn('matchMembersToEvents: 아직 동기화 안 됨, 스킵');
+    return;
+  }
   const now = new Date();
   const { start } = getWeekRange();
   const thisWeekKey = start.toISOString().slice(0, 10);
@@ -1299,13 +1422,11 @@ function matchMembersToEvents() {
         title: evt.summary,
         start: evt.start.dateTime || evt.start.date
       }));
-
       if (weekOffset === 0) {
         member.missedWeeks = 0;
         member.lastMissedWeekKey = null;
       }
-
-      // 완료된 수업 자동 차감 (중복 방지) — remaining이 있을 때만
+      // 완료된 수업 자동 차감 (중복 방지)
       if (weekOffset === 0 && member.remaining !== undefined && member.remaining !== null && member.remaining !== '') {
         member.sessions.forEach(s => {
           const startTime = new Date(s.start);
@@ -1313,6 +1434,8 @@ function matchMembersToEvents() {
           if (isPast && !member.deductedIds.includes(s.id)) {
             member.remaining = Math.max(0, (member.remaining || 0) - 1);
             member.deductedIds.push(s.id);
+            // 오래된 항목 제거 (셀 크기 제한 방지: 최근 200개만 유지)
+            if (member.deductedIds.length > 200) member.deductedIds = member.deductedIds.slice(-200);
           }
         });
       }
@@ -1324,9 +1447,7 @@ function matchMembersToEvents() {
       }
     }
   });
-
-  // sessions, missedWeeks만 저장 (remaining은 ⚙️에서만 저장)
-  saveMembers();
+  await saveMembers();
 }
 
 // ===== RENDER =====
@@ -1334,6 +1455,8 @@ function renderAll() {
   const noList = document.getElementById('no-session-list');
   const hasList = document.getElementById('has-session-list');
 
+  // sessions가 없는 경우 빈 배열로 보정
+  members.forEach(m => { if (!m.sessions) m.sessions = []; });
   const noSession = members.filter(m => m.sessions.length === 0);
   const hasSession = members.filter(m => m.sessions.length > 0);
 
@@ -1358,7 +1481,7 @@ function renderAll() {
 function renderSchedule() {
   const container = document.getElementById('schedule-days');
   if (!container) return;
-  if (calendarEvents.length === 0) return;
+  if (!calendarEvents || calendarEvents.length === 0) return;
 
   const { start } = getWeekRange();
   const now = new Date();
@@ -1428,7 +1551,7 @@ function renderSchedule() {
       const timeStr = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
       const title = (evt.summary || '').replace(/회원님/g,'').trim();
 
-      daysHtml += `<div class="cal-block ${isPast ? 'past' : 'upcoming'}" style="top:${topPx}px;height:${heightPx}px" title="${evt.summary || ''}">
+      daysHtml += `<div class="cal-block ${isPast ? 'past' : 'upcoming'}" style="top:${topPx}px;height:${heightPx}px" title="${(evt.summary || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}">
         <div class="blk-time">${timeStr}</div>
         <div class="blk-name">${title}</div>
       </div>`;
@@ -1464,10 +1587,12 @@ function memberCard(member, hasSession) {
   let remainingHtml = '';
   if (remaining !== null) {
     let color = '#4caf7d'; // 초록 (넉넉)
-    if (remaining <= 3) color = '#ff4d4d'; // 빨강
+    if (remaining === 0) color = '#ff4d4d';
+    else if (remaining <= 3) color = '#ff4d4d'; // 빨강
     else if (remaining <= 6) color = '#ffaa55'; // 주황
     else if (remaining <= 10) color = '#ffd600'; // 노랑
-    remainingHtml = `<span style="font-size:12px;font-weight:700;color:${color};margin-left:6px;background:${color}22;padding:2px 8px;border-radius:20px;">${remaining}회 남음</span>`;
+    const zeroAlert = remaining === 0 ? ' 🚨' : '';
+    remainingHtml = `<span style="font-size:12px;font-weight:700;color:${color};margin-left:6px;background:${color}22;padding:2px 8px;border-radius:20px;">${remaining}회 남음${zeroAlert}</span>`;
   }
 
   // 장기 미예약 자동 감지 (missedWeeks >= 2) 또는 수동 태그
@@ -1534,6 +1659,8 @@ function openMemberSettings(id) {
       </div>
     </div>
   `;
+  const existingModal = document.getElementById('settings-modal');
+  if (existingModal) existingModal.remove();
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
@@ -1541,7 +1668,8 @@ function saveMemberSettings(id) {
   const member = members.find(m => m.id === id);
   if (!member) return;
   const val = document.getElementById('settings-remaining').value;
-  member.remaining = val !== '' ? parseInt(val) : undefined;
+  const parsed = parseInt(val);
+  member.remaining = (val !== '' && !isNaN(parsed)) ? parsed : undefined;
   member.attention = document.getElementById('settings-attention').checked;
   document.getElementById('settings-modal').remove();
   saveMembers();
@@ -1562,7 +1690,11 @@ function addMember() {
   const name = input.value.trim();
   if (!name) return;
 
-  const newMember = { id: Date.now(), name, sessions: [] };
+  if (members.some(m => m.name === name)) {
+    showToast('이미 같은 이름의 회원이 있어요', 'error');
+    return;
+  }
+  const newMember = { id: Date.now(), name, sessions: [], deductedIds: [] };
   members.push(newMember);
   saveMembers();
   input.value = '';
@@ -1572,6 +1704,9 @@ function addMember() {
 }
 
 function removeMember(id) {
+  const member = members.find(m => m.id === id);
+  if (!member) return;
+  if (!confirm(`"${member.name}" 회원을 삭제할까요? 이 작업은 되돌릴 수 없어요.`)) return;
   members = members.filter(m => m.id !== id);
   saveMembers();
   renderAll();
@@ -1582,10 +1717,11 @@ function openCalModal(memberId) {
   selectedMemberId = memberId;
   selectedEventIds = [];
   const member = members.find(m => m.id === memberId);
+  if (!member) return;
   document.getElementById('modal-member-name').textContent = `${member.name} 회원의 이번 주 수업을 선택하세요`;
 
   const list = document.getElementById('cal-event-list');
-  if (calendarEvents.length === 0) {
+  if (!calendarEvents || calendarEvents.length === 0) {
     list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:30px;font-size:13px">먼저 캘린더를 동기화해주세요</div>';
   } else {
     list.innerHTML = calendarEvents.map(evt => {
@@ -1616,6 +1752,7 @@ function toggleEvent(el, id, title, start) {
 function confirmSession() {
   if (!selectedMemberId) return;
   const member = members.find(m => m.id === selectedMemberId);
+  if (!member) return;
   member.sessions = selectedEventIds;
   saveMembers();
   closeModal();
@@ -1657,6 +1794,14 @@ function showDemoMode() {
 // ===== CLOSE MODAL ON BG CLICK =====
 document.getElementById('cal-modal').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
+});
+
+// ===== 탭 포어그라운드 복귀 시 데이터 재로드 (멀티탭 데이터 싱크) =====
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && isSignedIn && !isSyncing) {
+    // 백그라운드에서 다른 탭이 데이터를 변경했을 수 있으므로 재로드
+    loadMembers().then(() => { renderAll(); syncCalendar(true); });
+  }
 });
 
 // ===== START =====
