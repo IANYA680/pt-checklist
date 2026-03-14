@@ -1572,7 +1572,13 @@ async function matchMembersToEvents() {
   }
 
   // 저장 전 최신 시트 데이터 로드 (다른 기기 변경사항 반영)
+  // 실패 시 저장 중단 (기존 데이터 보호)
+  const prevCount = members.length;
   await loadMembers();
+  if (members.length === 0 && prevCount > 0) {
+    console.warn('matchMembersToEvents: loadMembers 실패로 저장 중단');
+    return;
+  }
 
   const now = new Date();
   const { start } = getWeekRange();
